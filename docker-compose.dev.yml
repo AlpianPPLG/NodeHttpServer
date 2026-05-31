@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # Development API Server (with hot reload)
+  api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: velocity-api-dev
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Debug port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://velocity:velocity123@postgres:5432/velocity_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret-key
+      - JWT_EXPIRATION=24h
+      - CORS_ORIGIN=http://localhost:3000
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - velocity-network
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    command: npm run dev
+
+  # PostgreSQL Database (same as production)
+  postgres:
+    image: postgres:15-alpine
+    container_name: velocity-postgres-dev
+    environment:
+      - POSTGRES_DB=velocity_db
+      - POSTGRES_USER=velocity
+      - POSTGRES_PASSWORD=velocity123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - velocity-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velocity -d velocity_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (same as production)
+  redis:
+    image: redis:7-alpine
+    container_name: velocity-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - velocity-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+
+networks:
+  velocity-network:
+    driver: bridge
