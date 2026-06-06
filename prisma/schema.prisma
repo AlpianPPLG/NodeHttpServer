@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma Schema Definition
+// Database: PostgreSQL 15+
 
 generator client {
   provider = "prisma-client-js"
@@ -10,52 +10,190 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User model for authentication and profile
+// ============================================
+// User Model
+// ============================================
 model User {
-  id            String          @id @default(cuid())
-  email         String          @unique
-  username      String          @unique
-  password      String          // hashed password
-  firstName     String?
-  lastName      String?
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  password      String
   avatar        String?
   bio           String?
-  isActive      Boolean         @default(true)
-  isEmailVerified Boolean        @default(false)
-  lastLoginAt   DateTime?
+  role          Role     @default(USER)
+  status        UserStatus @default(ACTIVE)
+  emailVerified Boolean  @default(false)
+  lastLogin     DateTime?
   
-  // Relations
-  sessions      UserSession[]
+  // Relationships
+  posts         Post[]
+  comments      Comment[]
+  sessions      Session[]
   
-  // Timestamps
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
   @@map("users")
 }
 
-// User session model for JWT refresh tokens
-model UserSession {
-  id            String          @id @default(cuid())
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  DELETED
+}
+
+// ============================================
+// Post Model
+// ============================================
+model Post {
+  id            String   @id @default(cuid())
   userId        String
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  refreshToken  String          @unique
-  expiresAt     DateTime
+  title         String
+  content       String   @db.Text
+  excerpt       String?
+  slug          String   @unique
+  status        PostStatus @default(DRAFT)
   
-  // Device info
-  userAgent     String?
-  ipAddress     String?
+  likes         Int      @default(0)
+  viewCount     Int      @default(0)
+  commentCount  Int      @default(0)
   
-  // Status
-  isActive      Boolean         @default(true)
-  revokedAt     DateTime?
+  // Relationships
+  comments      Comment[]
+  tags          PostTag[]
   
-  // Timestamps
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  
-  @@map("user_sessions")
+  publishedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   @@index([userId])
+  @@index([status])
+  @@index([slug])
+  @@index([publishedAt])
+  @@map("posts")
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ============================================
+// Comment Model
+// ============================================
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  content   String   @db.Text
+  likes     Int      @default(0)
+  status    CommentStatus @default(PENDING)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId])
+  @@index([userId])
+  @@index([status])
+  @@map("comments")
+}
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================
+// Tag Model
+// ============================================
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  
+  posts     PostTag[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@map("tags")
+}
+
+// ============================================
+// PostTag Junction Table (Many-to-Many)
+// ============================================
+model PostTag {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+
+  @@unique([postId, tagId])
+  @@index([postId])
+  @@index([tagId])
+  @@map("post_tags")
+}
+
+// ============================================
+// Session Model (for JWT refresh tokens)
+// ============================================
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
   @@index([refreshToken])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ============================================
+// AuditLog Model (for tracking changes)
+// ============================================
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String
+  changes   Json?
+  ipAddress String?
+  userAgent String?
+  
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

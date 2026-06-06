@@ -6,6 +6,7 @@ import { Request, Response } from 'express';
 import { HealthCheckResponse } from '../types';
 import { config } from '../config/env';
 import { asyncHandler } from '../middleware/errorHandler';
+import { checkDatabaseHealth } from '../database/prisma';
 import { prisma } from '@/database';
 
 class HealthController {

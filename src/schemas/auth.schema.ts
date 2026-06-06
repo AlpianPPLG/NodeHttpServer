@@ -1,93 +1,92 @@
 /**
- * Authentication request/response schemas using Zod
+ * Authentication validation schemas
  */
 
 import { z } from 'zod';
 
-// Register request schema
-export const registerSchema = z.object({
-  email: z
-    .string()
-    .email('Invalid email address')
-    .min(5, 'Email must be at least 5 characters')
-    .max(255, 'Email must not exceed 255 characters'),
-  username: z
-    .string()
-    .min(3, 'Username must be at least 3 characters')
-    .max(30, 'Username must not exceed 30 characters')
-    .regex(
-      /^[a-zA-Z0-9_-]+$/,
-      'Username can only contain letters, numbers, hyphens, and underscores'
-    ),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .max(255, 'Password must not exceed 255 characters')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Password must contain at least one number')
-    .regex(
-      /[^A-Za-z0-9]/,
-      'Password must contain at least one special character'
-    ),
-  firstName: z
-    .string()
-    .min(1, 'First name is required')
-    .max(50, 'First name must not exceed 50 characters')
-    .optional(),
-  lastName: z
-    .string()
-    .min(1, 'Last name is required')
-    .max(50, 'Last name must not exceed 50 characters')
-    .optional(),
-});
+// Base schemas
+const emailSchema = z
+  .string()
+  .min(1, 'Email is required')
+  .email('Invalid email format')
+  .toLowerCase()
+  .trim();
 
-export type RegisterRequest = z.infer<typeof registerSchema>;
+const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters long')
+  .max(128, 'Password must be less than 128 characters long');
 
-// Login request schema
-export const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
+const nameSchema = z
+  .string()
+  .min(1, 'Name is required')
+  .max(100, 'Name must be less than 100 characters')
+  .trim();
+
+// Login schema
+export const LoginSchema = z.object({
+  email: emailSchema,
   password: z.string().min(1, 'Password is required'),
 });
 
-export type LoginRequest = z.infer<typeof loginSchema>;
+// Register schema
+export const RegisterSchema = z
+  .object({
+    name: nameSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    confirmPassword: z.string().min(1, 'Confirm password is required'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
-// Refresh token request schema
-export const refreshTokenSchema = z.object({
+// Refresh token schema
+export const RefreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required'),
 });
 
-export type RefreshTokenRequest = z.infer<typeof refreshTokenSchema>;
-
-// Auth response schema
-export const authResponseSchema = z.object({
-  accessToken: z.string(),
-  refreshToken: z.string(),
-  expiresIn: z.number(), // seconds
-  user: z.object({
-    id: z.string(),
-    email: z.string(),
-    username: z.string(),
-    firstName: z.string().nullable(),
-    lastName: z.string().nullable(),
-  }),
+// Forgot password schema
+export const ForgotPasswordSchema = z.object({
+  email: emailSchema,
 });
 
-export type AuthResponse = z.infer<typeof authResponseSchema>;
+// Reset password schema
+export const ResetPasswordSchema = z
+  .object({
+    token: z.string().min(1, 'Reset token is required'),
+    password: passwordSchema,
+    confirmPassword: z.string().min(1, 'Confirm password is required'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 
-// User response schema
-export const userResponseSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  username: z.string(),
-  firstName: z.string().nullable(),
-  lastName: z.string().nullable(),
-  avatar: z.string().nullable(),
-  bio: z.string().nullable(),
-  isActive: z.boolean(),
-  isEmailVerified: z.boolean(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+// Update profile schema
+export const UpdateProfileSchema = z.object({
+  name: nameSchema.optional(),
+  email: emailSchema.optional(),
 });
 
-export type UserResponse = z.infer<typeof userResponseSchema>;
+// Change password schema
+export const ChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: passwordSchema,
+    confirmPassword: z.string().min(1, 'Confirm password is required'),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+
+// Types derived from schemas
+export type LoginInput = z.infer<typeof LoginSchema>;
+export type RegisterInput = z.infer<typeof RegisterSchema>;
+export type RefreshTokenInput = z.infer<typeof RefreshTokenSchema>;
+export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;

@@ -27,6 +27,7 @@ import { routes } from './routes';
 // Import config and logger
 import { config } from './config/env';
 import { logger } from './utils/logger';
+import { connectDatabase } from './database/prisma';
 
 /**
  * Create Express application
@@ -76,7 +77,17 @@ export function createApp(): express.Application {
 /**
  * Start the server
  */
-export function startServer(): void {
+export async function startServer(): Promise<void> {
+  // Try to connect to database (optional)
+  try {
+    await connectDatabase();
+  } catch (error) {
+    logger.warn('Database connection failed, continuing without database...', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      component: 'database' 
+    });
+  }
+
   const app = createApp();
   const port = config.server.port;
 
@@ -101,14 +112,15 @@ export function startServer(): void {
   });
 
   // Graceful shutdown
-  const gracefulShutdown = (signal: string) => {
+  const gracefulShutdown = async (signal: string) => {
     logger.info(`Received ${signal}, shutting down gracefully...`);
 
-    server.close(() => {
+    server.close(async () => {
       logger.info('HTTP server closed');
 
-      // Close database connections, Redis, etc.
-      // TODO: Add cleanup for database and Redis connections
+      // Close database connections
+      const { disconnectDatabase } = await import('./database/prisma');
+      await disconnectDatabase();
 
       process.exit(0);
     });

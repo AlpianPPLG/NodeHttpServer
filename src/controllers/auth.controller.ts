@@ -1,171 +1,187 @@
-import { Request, Response } from 'express';
+/**
+ * Authentication Controller
+ * Handles HTTP requests for authentication endpoints
+ */
 
-import { asyncHandler } from '../middleware/errorHandler';
-import { ServiceUnavailableError } from '../types/error.types';
-import { authService } from '@/services/auth.service';
-import { registerSchema, loginSchema } from '@/schemas/auth.schema';
+import { Request, Response, NextFunction } from 'express';
+import { authService } from '../services/auth.service';
+import { logger } from '../utils/logger';
 
-export class AuthController {
-  public register = asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      // Validate request
-      const validationResult = registerSchema.safeParse(req.body);
-      if (!validationResult.success) {
-        res.status(400).json({
-          status: 'error',
-          message: 'Validation failed',
-          errors: validationResult.error.errors,
-        });
-        return;
-      }
+class AuthController {
+  /**
+   * Register new user
+   * POST /api/v1/auth/register
+   */
+  async register(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.register(req.body);
 
-      const { email, username, password, firstName, lastName } =
-        validationResult.data;
-
-      // Register user
-      const { user, accessToken, refreshToken } = await authService.register(
-        email,
-        username,
-        password,
-        firstName,
-        lastName
-      );
+      logger.info('User registration successful', {
+        component: 'auth-controller',
+        userId: result.user.id,
+        requestId: req.requestId,
+      });
 
       res.status(201).json({
         status: 'success',
-        data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            username: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            isActive: user.isActive,
-            isEmailVerified: user.isEmailVerified,
-            createdAt: user.createdAt,
-          },
-          tokens: {
-            accessToken,
-            refreshToken,
-          },
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          version: '1.0.0',
-        },
+        message: 'User registered successfully',
+        data: result,
       });
+    } catch (error) {
+      next(error);
     }
-  );
+  }
 
-  public login = asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      // Validate request
-      const validationResult = loginSchema.safeParse(req.body);
-      if (!validationResult.success) {
-        res.status(400).json({
-          status: 'error',
-          message: 'Validation failed',
-          errors: validationResult.error.errors,
-        });
-        return;
-      }
+  /**
+   * Login user
+   * POST /api/v1/auth/login
+   */
+  async login(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.login(req.body);
 
-      const { email, password } = validationResult.data;
-
-      // Login user
-      const { user, accessToken, refreshToken } = await authService.login(
-        email,
-        password,
-        req.get('User-Agent'),
-        req.ip
-      );
+      logger.info('User login successful', {
+        component: 'auth-controller',
+        userId: result.user.id,
+        requestId: req.requestId,
+      });
 
       res.status(200).json({
         status: 'success',
-        data: {
-          user: {
-            id: user.id,
-            email: user.email,
-            username: user.username,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            isActive: user.isActive,
-            isEmailVerified: user.isEmailVerified,
-            lastLoginAt: user.lastLoginAt,
-          },
-          tokens: {
-            accessToken,
-            refreshToken,
-          },
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          version: '1.0.0',
-        },
+        message: 'Login successful',
+        data: result,
       });
+    } catch (error) {
+      next(error);
     }
-  );
+  }
 
-  public refresh = asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const { refreshToken } = req.body;
+  /**
+   * Refresh access token
+   * POST /api/v1/auth/refresh
+   */
+  async refreshToken(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.refreshToken(req.body);
 
-      if (!refreshToken) {
-        res.status(400).json({
-          status: 'error',
-          message: 'Refresh token is required',
-        });
-      }
-
-      const { accessToken } =
-        await authService.refreshAccessToken(refreshToken);
+      logger.info('Token refresh successful', {
+        component: 'auth-controller',
+        userId: result.user.id,
+        requestId: req.requestId,
+      });
 
       res.status(200).json({
         status: 'success',
-        data: {
-          accessToken,
-        },
-        meta: {
-          timestamp: new Date().toISOString(),
-          version: '1.0.0',
-        },
+        message: 'Token refreshed successfully',
+        data: result,
       });
+    } catch (error) {
+      next(error);
     }
-  );
+  }
 
-  public logout = asyncHandler(async (req: Request, res: Response) => {
-    const { refreshToken } = req.body;
+  /**
+   * Logout user
+   * POST /api/v1/auth/logout
+   */
+  async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) {
+        throw new Error('User not authenticated');
+      }
 
-    if (refreshToken) {
-      await authService.logout(refreshToken);
+      await authService.logout(req.userId);
+
+      logger.info('User logout successful', {
+        component: 'auth-controller',
+        userId: req.userId,
+        requestId: req.requestId,
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Logout successful',
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Logged out successfully',
-      meta: {
-        timestamp: new Date().toISOString(),
-        version: '1.0.0',
-      },
-    });
-  });
+  /**
+   * Get current user profile
+   * GET /api/v1/auth/profile
+   */
+  async getProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) {
+        throw new Error('User not authenticated');
+      }
 
-  public forgotPassword = asyncHandler(async (req: Request, res: Response) => {
-    // TODO: Implement password reset flow
-    res.status(200).json({
-      status: 'success',
-      message: 'If email exists, password reset instructions will be sent',
-      meta: {
-        timestamp: new Date().toISOString(),
-        version: '1.0.0',
-      },
-    });
-  });
+      const user = await authService.getProfile(req.userId);
 
-  public resetPassword = asyncHandler(async (req: Request, res: Response) => {
-    // TODO: Implement password reset with token
-    throw new ServiceUnavailableError('Password reset not implemented yet');
-  });
+      res.status(200).json({
+        status: 'success',
+        data: { user },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Update user profile
+   * PUT /api/v1/auth/profile
+   */
+  async updateProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) {
+        throw new Error('User not authenticated');
+      }
+
+      const user = await authService.updateProfile(req.userId, req.body);
+
+      logger.info('Profile updated successfully', {
+        component: 'auth-controller',
+        userId: req.userId,
+        requestId: req.requestId,
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Profile updated successfully',
+        data: { user },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Change password
+   * POST /api/v1/auth/change-password
+   */
+  async changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.userId) {
+        throw new Error('User not authenticated');
+      }
+
+      await authService.changePassword(req.userId, req.body);
+
+      logger.info('Password changed successfully', {
+        component: 'auth-controller',
+        userId: req.userId,
+        requestId: req.requestId,
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Password changed successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const authController = new AuthController();

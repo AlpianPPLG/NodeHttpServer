@@ -49,13 +49,13 @@ export interface HealthCheckResponse {
 declare global {
   namespace Express {
     interface Request {
-      userId?: string;
+      userId: string;
       user?: {
         id: string;
         email: string;
         role: string;
       };
-      requestId?: string;
+      requestId: string;
     }
   }
 }
